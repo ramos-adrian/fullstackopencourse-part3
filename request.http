@@ -1,0 +1,31 @@
+POST http://localhost:3001/api/persons
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "Dummy name 2",
+  "number": "000002",
+  "some-data": "random data"
+}
+
+###
+
+POST http://localhost:3001/api/persons
+Accept: application/json
+Content-Type: application/json
+
+{
+  "number": "000003",
+  "some-data": "random data"
+}
+
+###
+DELETE http://localhost:3001/api/persons/1
+Accept: application/json
+
+###
+DELETE http://localhost:3001/api/persons/999
+Accept: application/json
+
+###
+
