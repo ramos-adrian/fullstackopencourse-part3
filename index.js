@@ -1,13 +1,15 @@
+require('dotenv').config()
 const express = require('express')
 const app = express()
-
 const morgan = require('morgan')
 const cors = require('cors')
+const PersonModel = require('./models/person')
 
-app.use(cors())
+
 app.use(express.json())
-
+app.use(cors())
 app.use(express.static('build'))
+
 
 morgan.token('body', (req) => {
     return JSON.stringify(req.body)
@@ -19,92 +21,81 @@ app.use(morgan(':method :url :status :res[content-length] - :response-time ms :b
     skip: (req, res) => req.method !== 'POST'
 }))
 
-let persons =
-    [
-        {
-            "id": 1,
-            "name": "Arto Hellas",
-            "number": "040-123456"
-        },
-        {
-            "id": 2,
-            "name": "Ada Lovelace",
-            "number": "39-44-5323523"
-        },
-        {
-            "id": 3,
-            "name": "Dan Abramov",
-            "number": "12-43-234345"
-        },
-        {
-            "id": 4,
-            "name": "Mary Poppendieck",
-            "number": "39-23-6423122"
-        }
-    ]
+const errorHandler = (error, req, res, next) => {
+    console.error(error.message)
 
-const getNewId = () => Math.floor(Math.random() * 999)
+    if (error.name === 'CastError') {
+        return res.status(400).send({error: "malformed id"})
+    }
+
+    else if (error.name === 'ValidationError') {
+        return res.status(400).json({error: error.message})
+    }
+
+    next(error)
+}
 
 app.get('/api/persons', (req, res) => {
-    res.json(persons)
+    PersonModel.find({})
+        .then(result => res.json(result))
 })
 
 app.get('/info', (req, res) => {
-    res.send(`<div><p>Phonebook has info for ${persons.length} people</p><p>${new Date()}</p></div>`)
+    PersonModel.find({})
+        .then(result => {
+            res.send(`<div><p>Phonebook has info for ${result.length} people</p><p>${new Date()}</p></div>`)
+        })
 })
 
-app.get('/api/persons/:id', (req, res) => {
-    const id = Number(req.params.id)
-    const person = persons.find(p => p.id === id)
-    if (person) res.json(person)
-    else {
-        res.statusMessage = "Person with that ID does not exist!"
-        res.status(404).end()
-    }
+app.get('/api/persons/:id', (req, res, next) => {
+    console.log("Looking by ID")
+    const id = req.params.id
+    PersonModel.findById(id)
+        .then(person => {
+            if (person) res.json(person)
+            else {
+                res.statusMessage = "Person with that ID does not exist!"
+                res.status(404).end()
+            }
+        })
+        .catch(error => next(error))
 })
 
-app.delete('/api/persons/:id', (req, res) => {
-    const id = Number(req.params.id)
-    persons = persons.filter(p => p.id !== id)
-    res.status(204).end()
+app.delete('/api/persons/:id', (req, res, next) => {
+    const id = req.params.id
+    PersonModel.findByIdAndRemove(id)
+        .then(result => res.status(204).end())
+        .catch(error => next(error))
 })
 
-app.post('/api/persons/', (req, res) => {
+app.post('/api/persons/', (req, res, next) => {
     const person = req.body
 
-    const newId = getNewId()
     const name = person.name
     const number = person.number
 
-    if (persons.find(p => p.name === name)) {
-        res.status(400).json({error: 'A person with that name already exists'})
-        return;
-    }
-
-    if (!name) {
-        res.status(400).json({error: 'Name is missing'})
-        return
-    }
-
-    if (!number) {
-        res.status(400).json({error: 'Number is missing'})
-        return
-    }
-
-    const newPerson = {
-        id: newId,
-        name: name,
-        number: number
-    }
-
-    persons = persons.concat(newPerson)
-
-    res.json(newPerson)
+    const newPerson = new PersonModel({name, number})
+    newPerson
+        .save().then(result => res.json(result))
+        .catch(error => next(error))
 })
 
-app.use(cors)
+app.put('/api/persons/:id', (req, res, next) => {
+    const id = req.params.id
+    const body = req.body
+    const name = body.name
+    const number = body.number
+
+    PersonModel.findByIdAndUpdate(id, {name, number}, {new: true, runValidators: true, context: 'query'})
+        .then(updatedPerson => {
+            res.json(updatedPerson)
+        })
+        .catch(error => next(error))
+})
+
+app.use(errorHandler)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
-    console.log("Listening on port 3001...")
+    console.log(`Listening on port ${PORT}...`)
 })
